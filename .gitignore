@@ -1,0 +1,23 @@
+# Python environment & cache
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.env
+
+# SQLite local database instances
+*.db
+*.sqlite3
+
+# IDE / Editor configuration
+.vscode/
+.idea/
+.antigravity/
+*.log
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
