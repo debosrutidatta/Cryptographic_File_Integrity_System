@@ -1,0 +1,10 @@
+{
+    "chunk_size": 65536,
+    "ignored_directories": [
+        ".git",
+        "__pycache__",
+        "venv",
+        ".venv",
+        "node_modules"
+    ]
+}
