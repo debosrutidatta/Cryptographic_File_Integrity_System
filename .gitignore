@@ -7,6 +7,8 @@ env/
 .env
 
 # SQLite local database instances
+backend/database.db-wal
+backend/database.db-shm
 *.db
 *.sqlite3
 
