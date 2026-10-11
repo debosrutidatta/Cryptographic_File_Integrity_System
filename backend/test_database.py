@@ -5,18 +5,25 @@ from database import (
     get_db_connection, 
     create_admin_user, 
     verify_admin_credentials, 
+    add_monitored_target,
+    save_baselines_for_target,
+    delete_monitored_target,
     DB_PATH
 )
 
 def run_database_tests():
     print("=" * 65)
-    print("DATABASE PERSISTENCE LAYER TEST SUITE")
+    print("DATABASE PERSISTENCE & CONSTRAINT TEST SUITE")
     print("=" * 65)
 
     # 1. Clean up old test db if it exists to start from a pristine state
     if os.path.exists(DB_PATH):
-        os.remove(DB_PATH)
-        print("[INFO] Removed existing test database for a clean verification run.")
+        try:
+            os.remove(DB_PATH)
+            print("[INFO] Removed existing test database for a clean verification run.")
+        except PermissionError:
+            print("[ERROR] database.db is locked. Please close any open SQLite viewers and retry.")
+            return
 
     # 2. Test Initialization & Schema Creation
     print("\n[TEST 1] Initializing Database Schema...")
@@ -73,8 +80,42 @@ def run_database_tests():
     conn.close()
     print(f"  -> SUCCESS: PRAGMA configurations active (Foreign Keys: ON, Journal Mode: WAL).")
 
+    # 9. Test Foreign Key Cascade Deletions (ON DELETE CASCADE)
+    print("\n[TEST 8] Testing Foreign Key Cascade Deletion...")
+    
+    # Register a monitored target using the official database helper function
+    success_target, target_id, target_msg = add_monitored_target("C:/test_cascade_workspace", is_directory=True, added_by=user_id)
+    assert success_target, f"Failed to add target for cascade test: {target_msg}"
+    
+    # Save a baseline record linked to this target using official database helpers
+    sample_baselines = {"C:/test_cascade_workspace/sample.txt": "abc123mockhash"}
+    success_base, base_msg = save_baselines_for_target(target_id, sample_baselines)
+    assert success_base, f"Failed to save baseline for cascade test: {base_msg}"
+    
+    # Verify the baseline record exists prior to target deletion
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM file_baselines WHERE target_id = ?", (target_id,))
+    count_before = cursor.fetchone()[0]
+    conn.close()
+    assert count_before == 1, "Baseline record was not inserted properly for cascade testing!"
+
+    # Delete the parent monitored target using the official delete helper
+    deleted = delete_monitored_target(target_id)
+    assert deleted, "Failed to delete monitored target during cascade test."
+
+    # Verify that the child file_baselines record was automatically removed via ON DELETE CASCADE
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM file_baselines WHERE target_id = ?", (target_id,))
+    count_after = cursor.fetchone()[0]
+    conn.close()
+    assert count_after == 0, "ON DELETE CASCADE failed! Child baseline records remain in the database."
+
+    print("  -> SUCCESS: Foreign key cascade deletion verified (Child records deleted automatically).")
+
     print("\n" + "=" * 65)
-    print("ALL DATABASE TESTS PASSED SUCCESSFULLY!")
+    print("ALL DATABASE TESTS & CASCADE CONSTRAINTS PASSED SUCCESSFULLY!")
     print("=" * 65)
 
 if __name__ == "__main__":

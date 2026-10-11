@@ -28,7 +28,7 @@ def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # 1. Users Table (Single-Admin Model - no role column required)
+    # 1. Users Table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,7 +43,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS monitored_targets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             target_path TEXT UNIQUE NOT NULL,
-            is_directory BOOLEAN NOT NULL, -- 1 for directory, 0 for single file
+            is_directory BOOLEAN NOT NULL,
             added_by INTEGER,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (added_by) REFERENCES users(id) ON DELETE CASCADE
@@ -81,8 +81,8 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             scan_id INTEGER NOT NULL,
             file_path TEXT NOT NULL,
-            old_path TEXT NULL,            -- Populated for Renamed/Moved files
-            status TEXT NOT NULL,          -- Safe, Modified, Deleted, New, Renamed_Moved, Copied_Duplicate
+            old_path TEXT NULL,
+            status TEXT NOT NULL,
             current_hash TEXT NULL,
             FOREIGN KEY (scan_id) REFERENCES scan_history(id) ON DELETE CASCADE
         )
@@ -92,7 +92,7 @@ def init_db():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS security_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            event_type TEXT NOT NULL,      -- e.g., "Failed Login", "Unauthorized Access"
+            event_type TEXT NOT NULL,
             details TEXT NOT NULL,
             ip_address TEXT NULL,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -100,7 +100,6 @@ def init_db():
     """)
 
     # --- PERFORMANCE INDEXES ---
-    # Optimized for fast querying by the React dashboard API layer
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_baselines_target ON file_baselines(target_id);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_results_scan ON scan_results(scan_id);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON security_logs(timestamp);")
@@ -148,6 +147,181 @@ def verify_admin_credentials(username, password):
     if user and bcrypt.checkpw(password.encode('utf-8'), user['password_hash'].encode('utf-8')):
         return True, user['id']
     return False, None
+
+
+# --- TARGET MANAGEMENT HELPERS ---
+
+def add_monitored_target(target_path, is_directory, added_by):
+    """Registers a new file or directory target for file integrity monitoring."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "INSERT INTO monitored_targets (target_path, is_directory, added_by) VALUES (?, ?, ?)",
+            (target_path, is_directory, added_by)
+        )
+        conn.commit()
+        target_id = cursor.lastrowid
+        return True, target_id, "Target registered successfully."
+    except sqlite3.IntegrityError:
+        return False, None, "Target path already exists."
+    finally:
+        conn.close()
+
+def get_all_monitored_targets():
+    """Retrieves all registered monitored targets."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM monitored_targets;")
+    targets = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return targets
+
+def delete_monitored_target(target_id):
+    """Deletes a monitored target and cascades deletion of its baselines."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM monitored_targets WHERE id = ?", (target_id,))
+    conn.commit()
+    rows_affected = cursor.rowcount
+    conn.close()
+    return rows_affected > 0
+
+
+# --- BASELINE & SCAN PERSISTENCE HELPERS ---
+
+def save_baselines_for_target(target_id, scan_dict):
+    """Saves or updates baseline SHA-256 hashes for a specific target."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM file_baselines WHERE target_id = ?", (target_id,))
+        for file_path, file_hash in scan_dict.items():
+            file_name = os.path.basename(file_path)
+            try:
+                file_size = os.path.getsize(file_path)
+            except OSError:
+                file_size = 0
+            cursor.execute(
+                """INSERT INTO file_baselines (target_id, file_name, file_path, file_size, sha256_hash)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (target_id, file_name, file_path, file_size, file_hash)
+            )
+        conn.commit()
+        return True, "Baselines established successfully."
+    except Exception as exc:
+        conn.rollback()
+        return False, str(exc)
+    finally:
+        conn.close()
+
+def get_baseline_dict_for_target(target_id):
+    """Fetches a dictionary of file paths and their baseline hashes for a given target."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT file_path, sha256_hash FROM file_baselines WHERE target_id = ?", (target_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    return {row["file_path"]: row["sha256_hash"] for row in rows}
+
+def get_all_baselines_dict():
+    """Fetches a dictionary of all file paths and baseline hashes across all targets."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT file_path, sha256_hash FROM file_baselines;")
+    rows = cursor.fetchall()
+    conn.close()
+    return {row["file_path"]: row["sha256_hash"] for row in rows}
+
+def record_scan_history(triggered_by, total_files):
+    """Records a new scan event in scan history and returns the generated scan ID."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO scan_history (triggered_by, total_files) VALUES (?, ?)",
+        (triggered_by, total_files)
+    )
+    conn.commit()
+    scan_id = cursor.lastrowid
+    conn.close()
+    return scan_id
+
+def save_scan_results(scan_id, comparison_results):
+    """Saves categorized file integrity check results into scan_results."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        for status, items in comparison_results.items():
+            for item in items:
+                if status in ["Safe", "Modified", "Deleted", "New"]:
+                    cursor.execute(
+                        "INSERT INTO scan_results (scan_id, file_path, old_path, status) VALUES (?, ?, NULL, ?)",
+                        (scan_id, item, status)
+                    )
+                elif status == "Renamed_Moved":
+                    cursor.execute(
+                        "INSERT INTO scan_results (scan_id, file_path, old_path, status) VALUES (?, ?, ?, ?)",
+                        (scan_id, item["to"], item["from"], status)
+                    )
+                elif status == "Copied_Duplicate":
+                    cursor.execute(
+                        "INSERT INTO scan_results (scan_id, file_path, old_path, status) VALUES (?, ?, ?, ?)",
+                        (scan_id, item["new_copy"], item["original_source"], status)
+                    )
+        conn.commit()
+        return True
+    except Exception as exc:
+        conn.rollback()
+        print(f"[ERROR] Failed to save scan results: {exc}")
+        return False
+    finally:
+        conn.close()
+
+
+# --- REPORTING & LOGGING HELPERS ---
+
+def get_scan_reports():
+    """Retrieves all historical scan summaries for dashboard reporting."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT sh.id, sh.scan_timestamp, sh.total_files, u.username as triggered_by_user
+        FROM scan_history sh
+        LEFT JOIN users u ON sh.triggered_by = u.id
+        ORDER BY sh.scan_timestamp DESC;
+    """)
+    scans = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return scans
+
+def get_scan_details_by_id(scan_id):
+    """Retrieves all file integrity findings associated with a specific scan ID."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM scan_results WHERE scan_id = ?", (scan_id,))
+    results = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return results
+
+def log_security_event(event_type, details, ip_address=None):
+    """Records security-relevant events into the security logs table."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO security_logs (event_type, details, ip_address) VALUES (?, ?, ?)",
+        (event_type, details, ip_address)
+    )
+    conn.commit()
+    conn.close()
+
+def get_security_logs():
+    """Retrieves all security audit logs."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM security_logs ORDER BY timestamp DESC;")
+    logs = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return logs
 
 
 if __name__ == "__main__":
