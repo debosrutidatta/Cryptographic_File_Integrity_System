@@ -1,7 +1,7 @@
 # Cryptographic File Integrity System
 
 ## Problem Statement
-Files can be modified, deleted, replaced, renamed, moved, copied or accessed without the owner's knowledge due to unauthorized access, malware or insider threats. The system uses cryptographic techniques to verify file integrity and detect suspicious changes. It also implements authentication and authorization to restrict access to the system and detect unauthorized access attempts.
+Files can be modified, deleted, replaced, renamed, moved, copied or accessed without the owner's knowledge due to unauthorized access, malware or insider threats. The system uses cryptographic techniques to verify file integrity and detect suspicious changes. It also implements authentication to restrict access to the system and detect unauthorized access attempts.
 
 Since a cryptographic hash verifies the contents of a file but not its name or location, the system also tracks file names and paths along with cryptographic hashes to distinguish between renamed/moved files and copied/duplicate files.
 
@@ -18,7 +18,6 @@ Since a cryptographic hash verifies the contents of a file but not its name or l
 - Distinguish between renamed/moved files and copied/duplicate files.
 - Classify files as Safe, Modified, Deleted, New, Renamed/Moved, or Copied/Duplicate.
 - Implement user authentication and secure password storage.
-- Implement role-based authorization for restricted system functions.
 - Detect and log unauthorized login or access attempts.
 - Generate security alerts for unauthorized access attempts and suspicious file changes.
 - Generate file integrity and security reports.
@@ -32,7 +31,7 @@ Since a cryptographic hash verifies the contents of a file but not its name or l
 - **OS / File System Operations** — File and recursive directory monitoring
 - **SQLite** — Database storage
 - **Flask** — Backend and web application
-- **HTML, CSS, Bootstrap** — Web dashboard interface
+- **React, Vite, JavaScript, CSS** — Web dashboard interface
 
 ---
 
@@ -52,8 +51,8 @@ Files are classified as:
 - **Renamed/Moved:** A previously monitored file is missing from its original path, but a file with the same SHA-256 hash is found at a different name or location within the monitored scope.
 - **Copied/Duplicate:** A new file with the same SHA-256 hash as an existing monitored file is detected while the original file still exists at its original path.
 
-### Authentication and Authorization
-Users must log in to access the system. Passwords are securely stored using bcrypt, and Role-Based Access Control (RBAC) restricts sensitive actions to authorized users.
+### Authentication
+Users must log in to access the system. Passwords are securely stored using bcrypt.
 
 ### Unauthorized Access Detection
 The system detects and logs:
@@ -72,7 +71,7 @@ Stores:
 - File sizes (optional additional metadata)
 - Timestamps
 - File verification status
-- User credentials and roles
+- User credentials
 - Security logs and unauthorized access attempts
 
 ### Security Reports
@@ -117,7 +116,7 @@ Administrator Selects File/Directory
 ### Access Security Process
 
 ```text
-User Login → Authentication → Authorization Check → Allow Access / Deny Access → Log Unauthorized Attempts → Generate Alert
+User Login → Authentication → Allow Access / Deny Access → Log Unauthorized Attempts → Generate Alert
 ```
 
 ---
@@ -126,7 +125,6 @@ User Login → Authentication → Authorization Check → Allow Access / Deny Ac
 
 - SHA-256 — File content integrity verification
 - bcrypt — Secure password hashing
-- RBAC (Role-Based Access Control) — User authorization and permission management
 - Recursive Directory Scanning — Monitoring files within selected directories and subdirectories
 - Hash and Path Comparison — Detection and differentiation of renamed/moved and copied/duplicate files
 
@@ -134,32 +132,62 @@ User Login → Authentication → Authorization Check → Allow Access / Deny Ac
 
 ## Setup & Installation
 
-1. Clone the repository:
+### 1. Clone the Repository
 
-   ```bash
-   git clone <repository-url>
-   cd Cryptographic_File_Integrity_System
-   ```
+```bash
+git clone <repository-url>
+cd Cryptographic_File_Integrity_System
+```
 
-2. Create and activate a virtual environment:
+### 2. Create and Activate a Virtual Environment
 
-   **Windows (PowerShell):**
+**Windows (PowerShell):**
 
-   ```bash
-   python -m venv venv
-   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-   .\venv\Scripts\Activate.ps1
-   ```
+```powershell
+python -m venv venv
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\venv\Scripts\Activate.ps1
+```
 
-   **macOS / Linux:**
+**macOS / Linux:**
 
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate
-   ```
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
 
-3. Install dependencies:
+### 3. Install Dependencies
 
-   ```bash
-   pip install -r requirements.txt
-   ```
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Install Frontend Dependencies
+
+Navigate into the `frontend/` directory and install the required Node.js modules:
+
+```bash
+cd frontend
+npm install
+```
+
+---
+
+## How to Run the Application Locally
+
+Run the full-stack application by opening two separate terminal windows.
+
+### Terminal 1: Frontend Development Server
+
+```bash
+cd frontend
+npm run dev
+```
+
+### Terminal 2: Flask Backend Server
+
+Ensure your Python virtual environment is activated.
+
+```bash
+python backend/app.py
+```
