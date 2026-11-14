@@ -1,6 +1,13 @@
 import os
+import sqlite3
+from pathlib import Path
+from dotenv import load_dotenv
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+
+# Load environment variables from local .env file
+env_path = Path(__file__).resolve().parent / '.env'
+load_dotenv(dotenv_path=env_path)
 
 # Import verified database helper functions and modules
 from database import (
@@ -18,7 +25,8 @@ from database import (
     get_scan_reports,
     get_scan_details_by_id,
     log_security_event,
-    get_security_logs
+    get_security_logs,
+    DB_PATH
 )
 from scanner import scan_target
 from comparator import compare_scans
@@ -27,13 +35,18 @@ app = Flask(__name__)
 # Enable CORS to allow secure communication with your React frontend
 CORS(app)
 
-# Ensure database tables exist and default admin is provisioned on startup
+# Ensure database tables exist and default admin is provisioned securely on startup
 with app.app_context():
     init_db()
     if not admin_exists():
-        # Default bootstrap credentials: admin / AdminSecurePass2026!
-        create_admin_user("admin", "AdminSecurePass2026!")
-        print("[INFO] Default admin account provisioned successfully.")
+        admin_user = os.environ.get("FIM_ADMIN_USER", "admin")
+        admin_pass = os.environ.get("FIM_ADMIN_PASS")
+        
+        if not admin_pass:
+            raise ValueError("[ERROR] FIM_ADMIN_PASS environment variable is not set! Please define it in your .env file.")
+            
+        create_admin_user(admin_user, admin_pass)
+        print("[INFO] Default admin account provisioned successfully from environment configuration.")
 
 
 @app.route('/api/health', methods=['GET'])
@@ -83,7 +96,7 @@ def get_targets():
 
 @app.route('/api/targets', methods=['POST'])
 def add_target():
-    """Registers a new monitored target path and captures its initial SHA-256 cryptographic baseline."""
+    """Registers a new monitored target path, or loads an existing one without overwriting its baseline."""
     if not request.is_json:
         return jsonify({"success": False, "error": "Content-Type must be application/json"}), 415
 
@@ -100,12 +113,26 @@ def add_target():
 
     is_directory = os.path.isdir(abs_path)
 
-    # Register target in SQLite
+    # Check if target already exists in database
+    existing_targets = get_all_monitored_targets()
+    matched_target = next((t for t in existing_targets if os.path.abspath(t['target_path']) == abs_path), None)
+
+    if matched_target:
+        target_id = matched_target['id']
+        # Do not overwrite baselines here; leave baseline intact for live comparison scanning
+        log_security_event("Target Selected", f"Monitored target selected for inspection: {abs_path}", request.remote_addr)
+        return jsonify({
+            "success": True,
+            "target_id": target_id,
+            "message": "Target selected successfully. Ready for integrity scan.",
+        }), 200
+
+    # Otherwise, register new target in SQLite
     success, target_id, msg = add_monitored_target(abs_path, is_directory, added_by)
     if not success:
         return jsonify({"success": False, "error": msg}), 409
 
-    # Capture and store initial file baselines
+    # Capture and store initial file baselines ONLY on first registration
     baseline_hashes = scan_target(abs_path, use_relative_paths=False)
     base_success, base_msg = save_baselines_for_target(target_id, baseline_hashes)
 
@@ -130,6 +157,41 @@ def remove_target(target_id):
         return jsonify({"success": True, "message": "Target and associated baselines removed successfully."}), 200
     else:
         return jsonify({"success": False, "error": "Target not found."}), 404
+
+
+@app.route('/api/targets/<int:target_id>/refresh', methods=['POST'])
+def refresh_target_baseline(target_id):
+    """Explicitly clears old baselines and captures the current disk state as the new baseline."""
+    targets = get_all_monitored_targets()
+    target = next((t for t in targets if t['id'] == target_id), None)
+    
+    if not target:
+        return jsonify({"success": False, "error": "Target not found."}), 404
+
+    target_path = target['target_path']
+    if not os.path.exists(target_path):
+        return jsonify({"success": False, "error": "Target path no longer exists on disk."}), 404
+
+    # Clear out existing baseline rows to prevent ghost deletions or duplicate conflicts
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM file_baselines WHERE target_id = ?", (target_id,))
+    conn.commit()
+    conn.close()
+
+    # Capture fresh live hashes and save them as the new baseline
+    baseline_hashes = scan_target(target_path, use_relative_paths=False)
+    success, msg = save_baselines_for_target(target_id, baseline_hashes)
+
+    if not success:
+        return jsonify({"success": False, "error": f"Failed to refresh baseline: {msg}"}), 500
+
+    log_security_event("Baseline Refreshed", f"Baseline fully reset and updated for target: {target_path}", request.remote_addr)
+    return jsonify({
+        "success": True,
+        "message": "Baseline refreshed successfully to current disk state.",
+        "file_count": len(baseline_hashes)
+    }), 200
 
 
 @app.route('/api/scan', methods=['POST'])
@@ -212,6 +274,135 @@ def get_alerts():
     """Retrieves security audit logs for threat monitoring."""
     logs = get_security_logs()
     return jsonify({"success": True, "alerts": logs}), 200
+
+
+@app.route('/api/security-logs', methods=['GET'])
+def fetch_security_logs():
+    """Retrieves security audit logs for the dedicated security logs viewer."""
+    try:
+        logs = get_security_logs()
+        return jsonify({"success": True, "logs": logs}), 200
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/browse', methods=['GET'])
+def browse_directory():
+    """Provides directory listing, supporting multi-drive switching and permission handling."""
+    req_path = request.args.get('path', '')
+    
+    # Special handler to list system drives (C:, D:, etc.)
+    if req_path == 'DRIVES' or req_path == 'computer':
+        entries = []
+        if os.name == 'nt':
+            import string
+            for letter in string.ascii_uppercase:
+                drive_path = f"{letter}:\\"
+                if os.path.exists(drive_path):
+                    entries.append({
+                        "name": f"Local Disk ({letter}:)",
+                        "path": drive_path.replace("\\", "/"),
+                        "is_dir": True
+                    })
+        else:
+            entries.append({
+                "name": "Root ( / )",
+                "path": "/",
+                "is_dir": True
+            })
+        return jsonify({
+            "success": True,
+            "current_path": "Computer / Drives",
+            "parent_path": None,
+            "entries": entries
+        }), 200
+
+    # Default to user home directory for initial view
+    if not req_path:
+        abs_path = os.path.expanduser("~")
+    else:
+        abs_path = os.path.abspath(req_path)
+
+    if not os.path.exists(abs_path) or not os.path.isdir(abs_path):
+        return jsonify({"success": False, "error": f"Directory not found: {abs_path}"}), 404
+
+    try:
+        entries = []
+        for entry in os.listdir(abs_path):
+            if entry.startswith('.'):
+                continue
+            full_path = os.path.join(abs_path, entry)
+            
+            try:
+                is_dir = os.path.isdir(full_path)
+                if is_dir:
+                    os.listdir(full_path)
+            except (PermissionError, OSError):
+                continue
+
+            entries.append({
+                "name": entry,
+                "path": full_path.replace("\\", "/"),
+                "is_dir": is_dir
+            })
+
+        # Sort: directories first, then files alphabetically
+        entries.sort(key=lambda x: (not x['is_dir'], x['name'].lower()))
+
+        parent_path = os.path.dirname(abs_path).replace("\\", "/")
+        
+        return jsonify({
+            "success": True,
+            "current_path": abs_path.replace("\\", "/"),
+            "parent_path": parent_path if parent_path != abs_path and len(abs_path) > 3 else 'DRIVES',
+            "entries": entries
+        }), 200
+    except PermissionError:
+        return jsonify({"success": False, "error": f"Access denied to system directory: {abs_path}"}), 403
+    except Exception as exc:
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+@app.route('/api/search', methods=['GET'])
+def search_directories():
+    """Searches recursively for directories matching a query within the current base path."""
+    query = request.args.get('q', '').strip().lower()
+    base_path = request.args.get('path', '')
+
+    if not base_path or not os.path.exists(base_path):
+        base_path = os.path.expanduser("~")
+
+    if not query or len(query) < 2:
+        return jsonify({"success": True, "results": []}), 200
+
+    results = []
+    max_results = 15
+
+    try:
+        for root, dirs, files in os.walk(base_path):
+            # Limit depth to maintain performance and prevent system hangs
+            rel_path = os.path.relpath(root, base_path)
+            depth = 0 if rel_path == '.' else len(rel_path.split(os.sep))
+            if depth > 4:
+                dirs[:] = []
+                continue
+
+            for d in dirs:
+                if query in d.lower():
+                    full_path = os.path.join(root, d).replace("\\", "/")
+                    results.append({
+                        "name": d,
+                        "path": full_path,
+                        "is_dir": True
+                    })
+                    if len(results) >= max_results:
+                        break
+            if len(results) >= max_results:
+                break
+
+        return jsonify({"success": True, "results": results}), 200
+    except Exception as exc:
+        return jsonify({"success": False, "error": str(exc)}), 500
 
 
 if __name__ == '__main__':

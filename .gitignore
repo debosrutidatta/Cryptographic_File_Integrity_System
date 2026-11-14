@@ -5,6 +5,7 @@ __pycache__/
 venv/
 env/
 .env
+backend/.env
 
 # SQLite local database instances
 backend/database.db-wal
@@ -23,3 +24,6 @@ backend/database.db-shm
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+# Frontend dependencies
+frontend/node_modules/

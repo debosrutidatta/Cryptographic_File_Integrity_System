@@ -191,11 +191,10 @@ def delete_monitored_target(target_id):
 # --- BASELINE & SCAN PERSISTENCE HELPERS ---
 
 def save_baselines_for_target(target_id, scan_dict):
-    """Saves or updates baseline SHA-256 hashes for a specific target."""
+    """Saves or updates baseline SHA-256 hashes for a specific target using INSERT OR REPLACE to prevent conflicts."""
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("DELETE FROM file_baselines WHERE target_id = ?", (target_id,))
         for file_path, file_hash in scan_dict.items():
             file_name = os.path.basename(file_path)
             try:
@@ -203,7 +202,7 @@ def save_baselines_for_target(target_id, scan_dict):
             except OSError:
                 file_size = 0
             cursor.execute(
-                """INSERT INTO file_baselines (target_id, file_name, file_path, file_size, sha256_hash)
+                """INSERT OR REPLACE INTO file_baselines (target_id, file_name, file_path, file_size, sha256_hash)
                    VALUES (?, ?, ?, ?, ?)""",
                 (target_id, file_name, file_path, file_size, file_hash)
             )
