@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-export default function ScanHistory() {
+export default function ScanHistory({ scanCount }) {
     const [reports, setReports] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -11,7 +11,7 @@ export default function ScanHistory() {
 
     useEffect(() => {
         fetchReports();
-    }, []);
+    }, [scanCount]);
 
     const fetchReports = async () => {
         setLoading(true);
@@ -83,15 +83,15 @@ export default function ScanHistory() {
     return (
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '10px', padding: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)', marginTop: '1.5rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
-                <h2 style={{ fontSize: '1.1rem', margin: 0, fontWeight: '600' }}>
+                <h2 style={{ fontSize: '1.1rem', margin: 0, fontWeight: '700', color: '#1f2937' }}>
                     Historical Scan Archive
                 </h2>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                     <button
                         onClick={fetchReports}
-                        style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', background: 'var(--bg-main)', color: 'var(--text-main)', border: '1px solid var(--border)', borderRadius: '4px', cursor: 'pointer' }}
+                        style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', background: 'var(--bg-main)', color: '#1f2937', border: '1px solid var(--border)', borderRadius: '4px', cursor: 'pointer', fontWeight: '600' }}
                     >
-                        Refresh Archive
+                        ↻ Refresh Archive
                     </button>
                     <button
                         onClick={() => setIsExpanded(!isExpanded)}
@@ -106,7 +106,7 @@ export default function ScanHistory() {
                             alignItems: 'center',
                             justifyContent: 'center',
                             cursor: 'pointer',
-                            color: 'var(--text-main)'
+                            color: '#1f2937'
                         }}
                     >
                         {isExpanded ? (
@@ -127,17 +127,17 @@ export default function ScanHistory() {
             {/* Archive Table */}
             <div style={{ height: isExpanded ? '450px' : '220px', transition: 'height 0.3s ease', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--input-bg)', marginBottom: '1.5rem' }}>
                 {loading ? (
-                    <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Loading archive records...</p>
+                    <p style={{ textAlign: 'center', padding: '2rem', color: '#4b5563', fontSize: '0.85rem' }}>Loading archive records...</p>
                 ) : reports.length === 0 ? (
-                    <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>No historical scan records found.</p>
+                    <p style={{ textAlign: 'center', padding: '2rem', color: '#4b5563', fontSize: '0.85rem' }}>No historical scan records found.</p>
                 ) : (
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', textAlign: 'left' }}>
                         <thead>
-                            <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-main)', color: 'var(--text-muted)' }}>
-                                <th style={{ padding: '0.6rem 0.75rem', fontWeight: '600' }}>Scan ID</th>
-                                <th style={{ padding: '0.6rem 0.75rem', fontWeight: '600' }}>Timestamp</th>
-                                <th style={{ padding: '0.6rem 0.75rem', fontWeight: '600' }}>Files Analyzed</th>
-                                <th style={{ padding: '0.6rem 0.75rem', fontWeight: '600', width: '120px', textAlign: 'right' }}>Action</th>
+                            <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-main)', color: '#374151' }}>
+                                <th style={{ padding: '0.6rem 0.75rem', fontWeight: '700' }}>Scan ID</th>
+                                <th style={{ padding: '0.6rem 0.75rem', fontWeight: '700' }}>Timestamp</th>
+                                <th style={{ padding: '0.6rem 0.75rem', fontWeight: '700' }}>Files Analyzed</th>
+                                <th style={{ padding: '0.6rem 0.75rem', fontWeight: '700', width: '120px', textAlign: 'right' }}>Action</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -149,16 +149,16 @@ export default function ScanHistory() {
                                         <td style={{ padding: '0.6rem 0.75rem', fontWeight: '600', color: 'var(--accent)' }}>
                                             Scan #{rep.id}
                                         </td>
-                                        <td style={{ padding: '0.6rem 0.75rem', fontFamily: 'monospace', color: 'var(--text-main)' }}>
+                                        <td style={{ padding: '0.6rem 0.75rem', fontFamily: 'monospace', color: '#111827' }}>
                                             {timestampVal}
                                         </td>
-                                        <td style={{ padding: '0.6rem 0.75rem', color: 'var(--text-main)' }}>
+                                        <td style={{ padding: '0.6rem 0.75rem', color: '#111827', fontWeight: '500' }}>
                                             {rep.total_files} files
                                         </td>
                                         <td style={{ padding: '0.6rem 0.75rem', textAlign: 'right' }}>
                                             <button
                                                 onClick={() => handleViewReport(rep.id)}
-                                                style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', background: isViewing ? 'var(--text-muted)' : 'var(--accent)', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: '600', cursor: 'pointer' }}
+                                                style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', background: isViewing ? '#4b5563' : 'var(--accent)', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: '600', cursor: 'pointer' }}
                                             >
                                                 {isViewing ? 'Viewing' : 'View Report'}
                                             </button>
@@ -175,7 +175,7 @@ export default function ScanHistory() {
             {historicalReport && (
                 <div style={{ border: '1px solid var(--border)', borderRadius: '8px', padding: '1rem', background: 'var(--bg-main)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
-                        <h3 style={{ fontSize: '0.95rem', margin: 0, fontWeight: '600', color: 'var(--accent)' }}>
+                        <h3 style={{ fontSize: '0.95rem', margin: 0, fontWeight: '700', color: 'var(--accent)' }}>
                             Historic Inspection: Scan #{selectedScanId}
                         </h3>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -184,7 +184,7 @@ export default function ScanHistory() {
                             </span>
                             <button
                                 onClick={handleCloseInspection}
-                                style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', background: 'var(--bg-card)', color: 'var(--text-main)', border: '1px solid var(--border)', borderRadius: '4px', cursor: 'pointer', fontWeight: '600' }}
+                                style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', background: 'var(--bg-card)', color: '#1f2937', border: '1px solid var(--border)', borderRadius: '4px', cursor: 'pointer', fontWeight: '600' }}
                             >
                                 Close Inspection
                             </button>
@@ -207,7 +207,7 @@ export default function ScanHistory() {
                                         borderRadius: '6px',
                                         border: `1px solid ${isActive ? state.color : 'var(--border)'}`,
                                         background: isActive ? `${state.color}15` : 'var(--bg-card)',
-                                        color: isActive ? state.color : 'var(--text-main)',
+                                        color: isActive ? state.color : '#1f2937',
                                         cursor: 'pointer',
                                         display: 'flex',
                                         alignItems: 'center',
@@ -217,7 +217,7 @@ export default function ScanHistory() {
                                     <span>{state.label}</span>
                                     <span style={{
                                         background: isActive ? state.color : 'var(--border)',
-                                        color: isActive ? '#fff' : 'var(--text-main)',
+                                        color: isActive ? '#fff' : '#1f2937',
                                         padding: '0.1rem 0.3rem',
                                         borderRadius: '8px',
                                         fontSize: '0.7rem'
@@ -232,20 +232,20 @@ export default function ScanHistory() {
                     {/* Findings Table */}
                     <div style={{ height: '220px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--input-bg)' }}>
                         {currentItems.length === 0 ? (
-                            <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                            <p style={{ textAlign: 'center', padding: '2rem', color: '#4b5563', fontSize: '0.8rem' }}>
                                 No files recorded under the "{activeStateObj.label}" state for Scan #{selectedScanId}.
                             </p>
                         ) : (
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', textAlign: 'left' }}>
                                 <thead>
-                                    <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-muted)' }}>
-                                        <th style={{ padding: '0.5rem 0.75rem', fontWeight: '600' }}>File Path</th>
+                                    <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-card)', color: '#374151' }}>
+                                        <th style={{ padding: '0.5rem 0.75rem', fontWeight: '700' }}>File Path</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {currentItems.map((item, idx) => (
                                         <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
-                                            <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', color: 'var(--text-main)' }}>
+                                            <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', color: '#111827' }}>
                                                 {typeof item === 'string' ? item : item.path || JSON.stringify(item)}
                                             </td>
                                         </tr>

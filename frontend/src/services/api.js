@@ -30,10 +30,26 @@ export const apiTriggerScan = async (targetId = null) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ target_id: targetId }),
     });
-    return response.json();
+    const data = await response.json();
+
+    if (data.success) {
+        // Automatically notify all dashboard components that the scan finished!
+        window.dispatchEvent(new CustomEvent('fim-scan-completed'));
+    }
+    return data;
 };
 
 export const apiGetAlerts = async () => {
     const response = await fetch(`${API_BASE_URL}/alerts`);
+    return response.json();
+};
+
+export const apiGetAnalyticsTimeline = async () => {
+    const response = await fetch(`${API_BASE_URL}/analytics/timeline`);
+    return response.json();
+};
+
+export const apiGetAnalyticsDistribution = async () => {
+    const response = await fetch(`${API_BASE_URL}/analytics/distribution`);
     return response.json();
 };

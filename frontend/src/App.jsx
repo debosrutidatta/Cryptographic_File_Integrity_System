@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import Login from './components/Login';
 import TargetSelector from './components/TargetSelector';
 import ScanReport from './components/ScanReport';
+import FileIntegrityChart from './components/FileIntegrityChart';
+import FileHistory from './components/FileHistory';
 import ScanHistory from './components/ScanHistory';
 import SecurityLogs from './components/SecurityLogs';
 
@@ -11,6 +13,7 @@ function App() {
   const [theme, setTheme] = useState('light');
   const [, setTargets] = useState([]);
   const [currentScanReport, setCurrentScanReport] = useState(null);
+  const [scanCount, setScanCount] = useState(0);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   useEffect(() => {
@@ -41,7 +44,7 @@ function App() {
         <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
           <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: '1rem', marginBottom: '2rem' }}>
             <div>
-              <h1 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '600' }}>Cryptographic File Integrity System Dashboard</h1>
+              <h1 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '600', color: 'var(--text-main)' }}>Cryptographic File Integrity System Dashboard</h1>
               <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Authenticated Administrator (ID: {userId})</span>
             </div>
             <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
@@ -64,23 +67,32 @@ function App() {
             {/* Step 1: Target Selector & File Manager */}
             <TargetSelector
               userId={userId}
-              onScanComplete={(report) => setCurrentScanReport(report)}
+              onScanComplete={(report) => {
+                setCurrentScanReport(report);
+                setScanCount(prev => prev + 1);
+              }}
               onTargetUpdated={(fetchedTargets) => setTargets(fetchedTargets)}
             />
 
             {/* Step 2: Dedicated Live Scan Results Viewer */}
             <div>
-              <div style={{ fontSize: '0.9rem', fontWeight: '600', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+              <div style={{ fontSize: '0.9rem', fontWeight: '600', color: 'var(--text-main)', marginBottom: '0.5rem' }}>
                 Active Live Scan Workspace
               </div>
               <ScanReport report={currentScanReport} />
             </div>
 
+            {/* File Integrity Distribution Donut Chart */}
+            <FileIntegrityChart scanCount={scanCount} />
+
+            {/* File Change History & Forensic Timeline Investigation */}
+            <FileHistory scanCount={scanCount} />
+
             {/* Step 3: Historical Scans Archive & Historic Inspector */}
-            <ScanHistory />
+            <ScanHistory scanCount={scanCount} />
 
             {/* Step 4: Security Audit Logs Viewer */}
-            <SecurityLogs />
+            <SecurityLogs scanCount={scanCount} />
           </div>
         </div>
       )}
@@ -108,7 +120,7 @@ function App() {
             boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
             textAlign: 'center'
           }}>
-            <h3 style={{ margin: '0 0 0.75rem 0', fontSize: '1.2rem', fontWeight: '600' }}>
+            <h3 style={{ margin: '0 0 0.75rem 0', fontSize: '1.2rem', fontWeight: '600', color: 'var(--text-main)' }}>
               Confirm Session Termination
             </h3>
             <p style={{ margin: '0 0 1.5rem 0', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
